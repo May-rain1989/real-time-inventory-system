@@ -103,7 +103,9 @@ You can:
 ## 🔑 Authentication
 
 ### Login
+```
 POST /auth/login
+```
 
 Returns a JWT token.
 
