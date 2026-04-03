@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+}
+
+enum InventoryTransactionType {
+  STOCK_IN
+  STOCK_OUT
+  TRANSFER
+  ADJUSTMENT
+  RESERVE
+  RELEASE
+  COMMIT_OUT
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(STAFF)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  transactions InventoryTransaction[] @relation("TransactionCreatedBy")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  sku         String   @unique
+  description String?
+  unit        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  inventories  Inventory[]
+  transactions InventoryTransaction[]
+}
+
+model Warehouse {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  location  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  inventories         Inventory[]
+  transactions        InventoryTransaction[] @relation("TransactionWarehouse")
+  sourceTransfers     InventoryTransaction[] @relation("SourceWarehouse")
+  targetTransfers     InventoryTransaction[] @relation("TargetWarehouse")
+}
+
+model Inventory {
+  id          String   @id @default(cuid())
+  productId   String
+  warehouseId String
+  onHand      Int      @default(0)
+  reserved    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, warehouseId], map: "inventory_product_warehouse_unique")
+  @@index([warehouseId], map: "inventory_warehouse_idx")
+  @@index([productId], map: "inventory_product_idx")
+}
+
+model InventoryTransaction {
+  id                String                   @id @default(cuid())
+  type              InventoryTransactionType
+  productId         String
+  warehouseId       String
+  sourceWarehouseId String?
+  targetWarehouseId String?
+  quantity          Int
+
+  beforeOnHand      Int
+  afterOnHand       Int
+  beforeReserved    Int      @default(0)
+  afterReserved     Int      @default(0)
+
+  reference         String?
+  note              String?
+  createdById       String
+  createdAt         DateTime                 @default(now())
+
+  product           Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse         Warehouse  @relation("TransactionWarehouse", fields: [warehouseId], references: [id], onDelete: Cascade)
+  sourceWarehouse   Warehouse? @relation("SourceWarehouse", fields: [sourceWarehouseId], references: [id], onDelete: NoAction)
+  targetWarehouse   Warehouse? @relation("TargetWarehouse", fields: [targetWarehouseId], references: [id], onDelete: NoAction)
+  createdBy         User       @relation("TransactionCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([productId, warehouseId])
+  @@index([createdById])
+  @@index([createdAt])
+  @@index([type])
+}
